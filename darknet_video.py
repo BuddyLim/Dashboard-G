@@ -53,7 +53,10 @@ def cvDrawBoxes(detections, img):
 netMain = None
 metaMain = None
 altNames = None
-cmd = 'ffmpeg -i bleepsfxwav.wav -map 0:0 -map 0:1 -map 1:0 -map 2:0 -c:v copy -c:a copy output.avi'
+#cmd = 'ffmpeg -i bleepsfxwav.wav -map 0:0 -map 0:1 -map 1:0 -map 2:0 -c:v copy -c:a copy output.avi'
+cmd = 'ffmpeg -i input.mp4 -i music.mp3 -codec:v copy -codec:a aac -b:a 192k \
+-strict experimental -filter_complex "amerge,pan=stereo:c0<c0+c2:c1<c1+c3" \
+-shortest output.mp4'
 
 def YOLO():
 
