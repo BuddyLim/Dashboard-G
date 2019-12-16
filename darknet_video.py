@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import time
 import darknet
- 
+import pandas as pd
 # import simpleaudio as sa 
 import csv
 
@@ -52,11 +52,6 @@ def cvDrawBoxes(detections, img):
             #         subprocess.call(cmd,shell=True)
             #         play_obj = wave_obj.play()
             #         play_obj.wait_done()
-    with open('output.csv', 'w+', newline='') as f_output:
-        csv_output = csv.writer(f_output,delimiter=',')
-        print("CSV Opened")
-        if(framecount % 5 == 0):    
-            csv_output.writerows(map(lambda x: [x],detection))
 
     return img
 
@@ -64,6 +59,8 @@ def cvDrawBoxes(detections, img):
 netMain = None
 metaMain = None
 altNames = None
+listodetect = []
+framecountlist = []
 
 #cmd = 'ffmpeg -i bleepsfxwav.wav -map 0:0 -map 0:1 -map 1:0 -map 2:0 -c:v copy -c:a copy output.avi'
 cmd = 'ffmpeg -i input.mp4 -i music.mp3 -codec:v copy -codec:a aac -b:a 192k \
@@ -72,7 +69,8 @@ cmd = 'ffmpeg -i input.mp4 -i music.mp3 -codec:v copy -codec:a aac -b:a 192k \
 
 def YOLO():
     
-    global metaMain, netMain, altNames, detections,framecount
+    global metaMain, netMain, altNames,framecount,listodetect
+
 
     configPath = "cfg\yolov3.cfg"
     weightPath = "../../../yolov3.weights"
@@ -113,7 +111,7 @@ def YOLO():
         except Exception:
             pass
     #cap = cv2.VideoCapture(0)
-    cap = cv2.VideoCapture("C:\\Users\\user\\Documents\\FYP\\RearEndAccident3-1080.mp4")
+    cap = cv2.VideoCapture("C:\\Users\\user\\Documents\\FYP\\RearEndAccident4(E)-720.mp4")
     cap.set(3, cv2.CAP_PROP_FRAME_HEIGHT)
     cap.set(4, cv2.CAP_PROP_FRAME_WIDTH)
     out = cv2.VideoWriter(
@@ -127,7 +125,6 @@ def YOLO():
                                     darknet.network_height(netMain),3)
 
     while True:
-
         prev_time = time.time()
         ret, frame_read = cap.read()
         framecount = framecount + 1
@@ -153,6 +150,12 @@ def YOLO():
         
         darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
         detections = darknet.detect_image(netMain, metaMain, darknet_image, thresh=0.7)
+
+        for detection in detections:
+            if(framecount % 5 == 0):    
+                framecountlist.append(framecount)
+                listodetect.append(detection)
+
         image = cvDrawBoxes(detections, frame_resized)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         out.write(image)
@@ -171,7 +174,10 @@ def YOLO():
             cv2.waitKey(-1)
 
         #print(1/(time.time()-prev_time))
-        
+    df = pd.DataFrame(listodetect, columns =['Index','Confidence','X/Y/W/H'])
+    df['Frame Count'] = np.array(framecountlist)
+    df.to_csv("REA4-720-output.csv",index=False)
+
 
     cap.release()
     out.release()
