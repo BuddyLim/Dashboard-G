@@ -8,15 +8,24 @@ import numpy as np
 import time
 import darknet
 import pandas as pd
-# import simpleaudio as sa 
+import simpleaudio as sa 
 import csv
 
-#TODO: check FFMPEG to download FFMPEG static library
+#DONE: check FFMPEG to download FFMPEG static library
+#USING: FFMPEG ammended into sys path
+
 #TODO: parse video & warning audio into output video
-#TODO: check resolution settings for the system
+
+#DONE: check resolution settings for the system
+##USING: CV2 to get video resolution settings
+
 #TODO: create a GUI to for users to input the video
-#TODO: Baseline average size of car 
-#TODO: Interpolate the resolution of 512x512 to 1080p & 720p
+
+#DONE: Baseline average size of car
+##USING: Output CSV based on different videos
+##NOTE: Different video resolutions have slightly different car sizes
+
+#TODO: Interpolate the resolution of 416x416 to 1080p & 720p
 
 framecount = 0
 
@@ -44,15 +53,15 @@ def cvDrawBoxes(detections, img):
                     (pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     [0, 255, 0], 2)
 
-
             # if detection[0].decode() == "car":
             #     print("Width: " + str(w) +"\n" + "Height: " + str(h))
-            #     if w > 140 and h > 80:
-            #         wave_obj = sa.WaveObject.from_wave_file("bleepsfxwav.wav")
-            #         subprocess.call(cmd,shell=True)
-            #         play_obj = wave_obj.play()
-            #         play_obj.wait_done()
+            #     if w > 140 and h > 80: 
+            #       subprocess.call(cmd,shell=True)
+                    # wave_obj = sa.WaveObject.from_wave_file("bleepsfxwav.wav")
+                    # play_obj = wave_obj.play()
+                    # play_obj.wait_done()
 
+    del drawdetections[:]
     return img
 
 
@@ -61,16 +70,19 @@ metaMain = None
 altNames = None
 listodetect = []
 framecountlist = []
+drawdetections = []
+
+prev_h = 0
+prev_w = 0
 
 #cmd = 'ffmpeg -i bleepsfxwav.wav -map 0:0 -map 0:1 -map 1:0 -map 2:0 -c:v copy -c:a copy output.avi'
-cmd = 'ffmpeg -i input.mp4 -i music.mp3 -codec:v copy -codec:a aac -b:a 192k \
--strict experimental -filter_complex "amerge,pan=stereo:c0<c0+c2:c1<c1+c3" \
--shortest output.mp4'
+# cmd = 'ffmpeg -i input.mp4 -i music.mp3 -codec:v copy -codec:a aac -b:a 192k \
+# -strict experimental -filter_complex "amerge,pan=stereo:c0<c0+c2:c1<c1+c3" \
+# -shortest output.mp4'
 
 def YOLO():
     
-    global metaMain, netMain, altNames,framecount,listodetect
-
+    global metaMain, netMain, altNames, framecount, listodetect, drawdetections, prev_h, prev_w
 
     configPath = "cfg\yolov3.cfg"
     weightPath = "../../../yolov3.weights"
@@ -111,7 +123,7 @@ def YOLO():
         except Exception:
             pass
     #cap = cv2.VideoCapture(0)
-    cap = cv2.VideoCapture("C:\\Users\\user\\Documents\\FYP\\RearEndAccident4(E)-720.mp4")
+    cap = cv2.VideoCapture("C:\\Users\\user\\Documents\\FYP\\RearEndAccident1(E)-360.mp4")
     cap.set(3, cv2.CAP_PROP_FRAME_HEIGHT)
     cap.set(4, cv2.CAP_PROP_FRAME_WIDTH)
     out = cv2.VideoWriter(
@@ -142,9 +154,8 @@ def YOLO():
                                     darknet.network_height(netMain)),
                                 interpolation=cv2.INTER_LINEAR)
 
-        #Draws black borders on the sides so that YOLO only detects the mostly the middle section of the video
-        #(9th/12 Dec: Uncessary, better to just get all the object detected and just filter out the car with small areas)
-
+        ##Draws black borders on the sides so that YOLO only detects the mostly the middle section of the video
+        ##(9th/12 Dec: Uncessary, better to just get all the object detected and just filter out the car with small areas)
         # frame_resized = cv2.rectangle(frame_resized,(0,0),(90,416),(0,0,0),-1)
         # frame_resized = cv2.rectangle(frame_resized,(326,0),(416,416),(0,0,0),-1)
         
@@ -152,12 +163,36 @@ def YOLO():
         detections = darknet.detect_image(netMain, metaMain, darknet_image, thresh=0.7)
 
         for detection in detections:
-            if(framecount % 5 == 0):    
-                framecountlist.append(framecount)
-                listodetect.append(detection)
+            ## Appends the data of detections every 5 frames
+            ## So we don't modify the detections or detection list and we get the raw data of detections in the video
+            # if(framecount % 5 == 0):    
+            #     framecountlist.append(framecount)
+            #     listodetect.append(detection)
 
-        image = cvDrawBoxes(detections, frame_resized)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            x, y, w, h = detection[2][0],\
+            detection[2][1],\
+            detection[2][2],\
+            detection[2][3]
+            if(90 < x < 326 and 90 < y < 326):
+                if(w > 26 and h > 43):
+                    drawdetections.append(detection)
+                    print("ROC W: " + str(w - prev_w) + "\nROC H: "+ str(h - prev_h))
+                    if((w - prev_w) * 2.5 > 30 or (h - prev_h) * 2.5 > 35):
+                        wave_obj = sa.WaveObject.from_wave_file("bleepsfxwav.wav")
+                        play_obj = wave_obj.play()
+                        play_obj.wait_done()   
+
+                    prev_w = w
+                    prev_h = h
+                # if(w>350):
+                #     continue
+                # else:
+                #     drawdetections.append(detection)
+
+        image = cvDrawBoxes(drawdetections, frame_resized)
+        #image = cvDrawBoxes(detections, frame_resized)
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
         out.write(image)
         cv2.imshow('Warning-Sys', image)
 
@@ -173,10 +208,12 @@ def YOLO():
         if (key == ord('p')):
             cv2.waitKey(-1)
 
-        #print(1/(time.time()-prev_time))
-    df = pd.DataFrame(listodetect, columns =['Index','Confidence','X/Y/W/H'])
-    df['Frame Count'] = np.array(framecountlist)
-    df.to_csv("REA4-720-output.csv",index=False)
+        # print(1/(time.time()-prev_time))
+        #print((time.time()-prev_time))
+
+    # df = pd.DataFrame(listodetect, columns =['Index','Confidence','X/Y/W/H'])
+    # df['Frame Count'] = np.array(framecountlist)
+    # df.to_csv("REA3-1080-output.csv",index=False)
 
 
     cap.release()
