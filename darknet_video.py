@@ -9,8 +9,9 @@ import time
 import darknet
 import pandas as pd
 import simpleaudio as sa 
-import csv
+#import csv
 
+from pyimagesearch.centroidtracker import CentroidTracker
 #DONE: check FFMPEG to download FFMPEG static library
 #USING: FFMPEG ammended into sys path
 
@@ -123,7 +124,7 @@ def YOLO():
         except Exception:
             pass
     #cap = cv2.VideoCapture(0)
-    cap = cv2.VideoCapture("C:\\Users\\user\\Documents\\FYP\\RearEndAccident1(E)-360.mp4")
+    cap = cv2.VideoCapture("C:\\Users\\user\\Documents\\FYP\\RearEndAccident2(E)-1080.mp4")
     cap.set(3, cv2.CAP_PROP_FRAME_HEIGHT)
     cap.set(4, cv2.CAP_PROP_FRAME_WIDTH)
     out = cv2.VideoWriter(
@@ -135,6 +136,9 @@ def YOLO():
     # Create an image we reuse for each detect
     darknet_image = darknet.make_image(darknet.network_width(netMain),
                                     darknet.network_height(netMain),3)
+
+    Ct = CentroidTracker()
+    (H,W) = (416,416)
 
     while True:
         prev_time = time.time()
@@ -162,6 +166,8 @@ def YOLO():
         darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
         detections = darknet.detect_image(netMain, metaMain, darknet_image, thresh=0.7)
 
+        rects = []
+
         for detection in detections:
             ## Appends the data of detections every 5 frames
             ## So we don't modify the detections or detection list and we get the raw data of detections in the video
@@ -169,27 +175,41 @@ def YOLO():
             #     framecountlist.append(framecount)
             #     listodetect.append(detection)
 
+            # Own object tracking 
+            #1. Get the bounding boxes and get the centroid
+            #2. Calculate the Eculidian distance between the previous centroid and current centroid
+            #3. Closest distance of previous centroid and current centroid is considered the same object
+            #4. Store the centroid and the bounding boxes in a list
             x, y, w, h = detection[2][0],\
             detection[2][1],\
             detection[2][2],\
             detection[2][3]
             if(90 < x < 326 and 90 < y < 326):
                 if(w > 26 and h > 43):
+                    xmin, ymin, xmax, ymax = convertBack(float(x), float(y), float(w), float(h))
+                    box = xmin, ymin, xmax, ymax
                     drawdetections.append(detection)
-                    print("ROC W: " + str(w - prev_w) + "\nROC H: "+ str(h - prev_h))
-                    if((w - prev_w) * 2.5 > 30 or (h - prev_h) * 2.5 > 35):
-                        wave_obj = sa.WaveObject.from_wave_file("bleepsfxwav.wav")
-                        play_obj = wave_obj.play()
-                        play_obj.wait_done()   
+                    rects.append(box)
+                    # print("ROC W: " + str(w - prev_w) + "\nROC H: "+ str(h - prev_h))
+                    # if((w - prev_w) * 2.5 > 30 or (h - prev_h) * 2.5 > 35):
+                    #     wave_obj = sa.WaveObject.from_wave_file("bleepsfxwav.wav")
+                    #     play_obj = wave_obj.play()
+                    #     play_obj.wait_done()   
 
-                    prev_w = w
-                    prev_h = h
+                    # prev_w = w
+                    # prev_h = h
                 # if(w>350):
                 #     continue
                 # else:
                 #     drawdetections.append(detection)
+        objects = Ct.update(rects)
+        for(objectID,centroid) in objects.items():
+            text = "ID {}".format(objectID)
+            cv2.putText(frame_resized, text, (centroid[0] - 10, centroid[1] - 10),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.circle(frame_resized, (centroid[0], centroid[1]), 4, (0, 255, 0), -1) 
 
-        image = cvDrawBoxes(drawdetections, frame_resized)
+        #image = cvDrawBoxes(Ct.bbox, frame_resized)
         #image = cvDrawBoxes(detections, frame_resized)
         # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)

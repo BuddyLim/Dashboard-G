@@ -4,7 +4,8 @@ from collections import OrderedDict
 import numpy as np
 
 class CentroidTracker():
-	def __init__(self, maxDisappeared=50):
+
+	def __init__(self, maxDisappeared=30):
 		# initialize the next unique object ID along with two ordered
 		# dictionaries used to keep track of mapping a given object
 		# ID to its centroid and number of consecutive frames it has
@@ -12,16 +13,17 @@ class CentroidTracker():
 		self.nextObjectID = 0
 		self.objects = OrderedDict()
 		self.disappeared = OrderedDict()
-
+		self.bbox = []
 		# store the number of maximum consecutive frames a given
 		# object is allowed to be marked as "disappeared" until we
 		# need to deregister the object from tracking
 		self.maxDisappeared = maxDisappeared
 
-	def register(self, centroid):
+	def register(self, centroid, bbox):
 		# when registering an object we use the next available object
 		# ID to store the centroid
 		self.objects[self.nextObjectID] = centroid
+		self.bbox = bbox
 		self.disappeared[self.nextObjectID] = 0
 		self.nextObjectID += 1
 
@@ -52,20 +54,19 @@ class CentroidTracker():
 
 		# initialize an array of input centroids for the current frame
 		inputCentroids = np.zeros((len(rects), 2), dtype="int")
-
+		bbox = []
 		# loop over the bounding box rectangles
 		for (i, (startX, startY, endX, endY)) in enumerate(rects):
 			# use the bounding box coordinates to derive the centroid
 			cX = int((startX + endX) / 2.0)
 			cY = int((startY + endY) / 2.0)
 			inputCentroids[i] = (cX, cY)
-
+			bbox.insert(i, (startX, startY, endX, endY))
 		# if we are currently not tracking any objects take the input
 		# centroids and register each of them
 		if len(self.objects) == 0:
 			for i in range(0, len(inputCentroids)):
-				self.register(inputCentroids[i])
-
+				self.register(inputCentroids[i],bbox[i])
 		# otherwise, are are currently tracking objects so we need to
 		# try to match the input centroids to existing object
 		# centroids
@@ -147,7 +148,7 @@ class CentroidTracker():
 			# register each new input centroid as a trackable object
 			else:
 				for col in unusedCols:
-					self.register(inputCentroids[col])
-
+					self.register(inputCentroids[col],bbox)
+	
 		# return the set of trackable objects
 		return self.objects
