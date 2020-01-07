@@ -10,10 +10,8 @@ import darknet
 import pandas as pd
 import simpleaudio as sa
 import objecttrack
-#import csv
-
-#from pyimagesearch.centroidtracker import CentroidTracker
-
+from pyimagesearch.centroidtracker import CentroidTracker
+from collections import OrderedDict
 
 framecount = 0
 
@@ -26,37 +24,39 @@ def convertBack(x, y, w, h):
     return xmin, ymin, xmax, ymax
 
 
-def cvDrawBoxes(detections, img):
-    for counter, detection in enumerate(detections):
-        x, y, w, h = detection[2][0],\
-            detection[2][1],\
-            detection[2][2],\
-            detection[2][3]
-        xmin, ymin, xmax, ymax = convertBack(
-            float(x), float(y), float(w), float(h))
-        pt1 = (xmin, ymin)
-        pt2 = (xmax, ymax)
-        cv2.rectangle(img, pt1, pt2, (0, 255, 0), 1)
-        cv2.putText(img,
-                    detection[0].decode() +
-                    " [" + str(counter) + " " +
-                    str(round(detection[1] * 100, 2)) + "]",
-                    (pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                    [0, 255, 0], 2)
+# def cvDrawBoxes(detections, img):
+#     for counter, detection in enumerate(detections):
+#         x, y, w, h = detection[2][0],\
+#             detection[2][1],\
+#             detection[2][2],\
+#             detection[2][3]
+#         xmin, ymin, xmax, ymax = convertBack(
+#             float(x), float(y), float(w), float(h))
+#         pt1 = (xmin, ymin)
+#         pt2 = (xmax, ymax)
+#         cv2.rectangle(img, pt1, pt2, (0, 255, 0), 1)
+#         cv2.putText(img,
+#                     detection[0].decode() +
+#                     " [" + str(counter) + " " +
+#                     str(round(detection[1] * 100, 2)) + "]",
+#                     (pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+#                     [0, 255, 0], 2)
 
-    del detections[:]
-    return img
+#     del detections[:]
+#     return img
 
 
 netMain = None
 metaMain = None
 altNames = None
-listodetect = []
-framecountlist = []
-drawdetections = []
 
-prev_h = 0
-prev_w = 0
+framecountlist = []
+
+prev_h = OrderedDict()
+prev_w = OrderedDict()
+
+cur_h = OrderedDict()
+cur_w = OrderedDict()
 
 #cmd = 'ffmpeg -i bleepsfxwav.wav -map 0:0 -map 0:1 -map 1:0 -map 2:0 -c:v copy -c:a copy output.avi'
 # cmd = 'ffmpeg -i input.mp4 -i music.mp3 -codec:v copy -codec:a aac -b:a 192k \
@@ -66,7 +66,7 @@ prev_w = 0
 
 def YOLO():
 
-    global metaMain, netMain, altNames, framecount, listodetect, drawdetections, prev_h, prev_w
+    global metaMain, netMain, altNames, framecount, cur_h, cur_w, prev_h, prev_w
 
     configPath = "cfg\yolov3.cfg"
     weightPath = "../../../yolov3.weights"
@@ -121,13 +121,12 @@ def YOLO():
     darknet_image = darknet.make_image(darknet.network_width(netMain),
                                        darknet.network_height(netMain), 3)
 
-    ot = objecttrack.objecttrack()
+    ct = CentroidTracker()
 
     while True:
         prev_time = time.time()
         ret, frame_read = cap.read()
         framecount = framecount + 1
-
         # If end of video, break loop. In some IDEs like Spyder, without this code,
         # the window frame will still persist and requires the user to force close via task manager
         if(np.shape(frame_read) == ()):
@@ -145,24 +144,57 @@ def YOLO():
         detections = darknet.detect_image(
             netMain, metaMain, darknet_image, thresh=0.7)
 
+        # print(len(detections)
+        rects = []
+
         for detection in detections:
-            # Own object tracking
-            # 1. Get the bounding boxes and get the centroid
-            # 2. Calculate the Eculidian distance between the previous centroid and current centroid
-            # 3. Closest distance of previous centroid and current centroid is considered the same object
-            # 4. Store the centroid and the bounding boxes in a list
             x, y, w, h = detection[2][0],\
                 detection[2][1],\
                 detection[2][2],\
                 detection[2][3]
             if(90 < x < 326 and 90 < y < 326):
                 if(w > 26 and h > 43):
-                    ot.increasecounter()
-                    # xmin, ymin, xmax, ymax = convertBack(
-                    #     float(x), float(y), float(w), float(h))
+                    xmin, ymin, xmax, ymax = convertBack(
+                        float(x), float(y), float(w), float(h))
+                    rects.append((xmin, ymin, xmax, ymax))
 
+        objects = ct.update(rects)
 
-        #image = cvDrawBoxes(drawdetections, frame_resized)
+        for (objectID, values) in objects.items():
+            text = "ID {}".format(objectID)
+            cv2.putText(frame_resized, text, (values[0][0] - 10, values[0][1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            pt1 = ((values[1][0], values[1][1]))  # x min & y min
+            pt2 = ((values[1][2], values[1][3]))  # x max & y max
+            cv2.rectangle(frame_resized, pt1, pt2, (0, 255, 0), 1)
+            cv2.circle(frame_resized,
+                       (values[0][0], values[0][1]), 4, (0, 255, 0), -1)
+
+            w = (pt1[0] + pt2[0])/2
+            h = (pt1[1] + pt2[1])/2
+            # print("W: {}\nH: {}".format(w,h))
+
+            #TODO: Hardcoded value of warning system
+            cur_w[objectID] = w
+            cur_h[objectID] = h  
+
+            if objectID not in prev_w:
+                prev_w[objectID] = w
+                prev_h[objectID] = h   
+            
+            else:
+                if(abs(cur_w[objectID] - prev_w[objectID]) * 2.5 > 32 or abs(cur_h[objectID] - prev_h[objectID]) * 2.5 > 35):
+                    print("Current W: {}\nCurrent H: {}".format(cur_w[objectID],cur_h[objectID]))
+                    print("Prev W: {}\nPrev H: {}".format(prev_w[objectID],prev_h[objectID]))
+                    print("ROC W: " + str(abs(cur_w[objectID] - prev_w[objectID]) * 2.5) + "\nROC H: "+ str(abs(cur_h[objectID]-prev_h[objectID]) *2.5))
+                    wave_obj = sa.WaveObject.from_wave_file(
+                        "bleepsfxwav.wav")
+                    play_obj = wave_obj.play()
+                    print("Car {} triggered".format(objectID))
+                    #play_obj.wait_done()
+                prev_w[objectID] = w
+                prev_h[objectID] = h              
+
         image = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
         out.write(image)
         cv2.imshow('Warning-Sys', image)
@@ -172,7 +204,6 @@ def YOLO():
         # Break the loop when Q is pressed
         if key == ord('q'):
             print('Broke the loop\n')
-            print("Number of cars: " + str(ot.returncounter()))
             print("Framecount: " + str(framecount))
             break
 
@@ -182,7 +213,6 @@ def YOLO():
 
         # print(1/(time.time()-prev_time))
         # print((time.time()-prev_time)))
-
     cap.release()
     out.release()
 
