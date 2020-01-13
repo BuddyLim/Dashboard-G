@@ -58,15 +58,17 @@ prev_w = OrderedDict()
 cur_h = OrderedDict()
 cur_w = OrderedDict()
 
+
+w_count = 0
 #cmd = 'ffmpeg -i bleepsfxwav.wav -map 0:0 -map 0:1 -map 1:0 -map 2:0 -c:v copy -c:a copy output.avi'
 # cmd = 'ffmpeg -i input.mp4 -i music.mp3 -codec:v copy -codec:a aac -b:a 192k \
-# -strict experimental -filter_complex "amerge,pan=stereo:c0<c0+c2:c1<c1+c3" \
+# -strict experimental -filter_complex "amerge,pan=stereo:c0<c0+c2:c1<c1+c3" \  
 # -shortest output.mp4'
 
 
-def YOLO():
+def YOLO(videopath):
 
-    global metaMain, netMain, altNames, framecount, cur_h, cur_w, prev_h, prev_w
+    global metaMain, netMain, altNames, framecount, cur_h, cur_w, prev_h, prev_w, w_count
 
     configPath = "cfg\yolov3.cfg"
     weightPath = "../../../yolov3.weights"
@@ -106,9 +108,8 @@ def YOLO():
                     pass
         except Exception:
             pass
-
-    cap = cv2.VideoCapture(
-        "C:\\Users\\user\\Documents\\FYP\\RearEndAccident2(E)-1080.mp4")
+    cap = cv2.VideoCapture(videopath)
+    # cap = cv2.VideoCapture("C:\\Users\\user\\Documents\\FYP\\RearEndAccident2(E)-1080.mp4")
     cap.set(3, cv2.CAP_PROP_FRAME_HEIGHT)
     cap.set(4, cv2.CAP_PROP_FRAME_WIDTH)
     out = cv2.VideoWriter(
@@ -123,10 +124,12 @@ def YOLO():
 
     ct = CentroidTracker()
 
+    w_count = 0
+
     while True:
         prev_time = time.time()
         ret, frame_read = cap.read()
-        framecount = framecount + 1
+        framecount += 1
         # If end of video, break loop. In some IDEs like Spyder, without this code,
         # the window frame will still persist and requires the user to force close via task manager
         if(np.shape(frame_read) == ()):
@@ -153,7 +156,7 @@ def YOLO():
                 detection[2][2],\
                 detection[2][3]
             if(90 < x < 326 and 90 < y < 326):
-                if(w > 26 and h > 43):
+                if(w > 35 and h > 50 and w <410):
                     xmin, ymin, xmax, ymax = convertBack(
                         float(x), float(y), float(w), float(h))
                     rects.append((xmin, ymin, xmax, ymax))
@@ -184,14 +187,15 @@ def YOLO():
             
             else:
                 if(abs(cur_w[objectID] - prev_w[objectID]) * 2.5 > 32 or abs(cur_h[objectID] - prev_h[objectID]) * 2.5 > 35):
-                    print("Current W: {}\nCurrent H: {}".format(cur_w[objectID],cur_h[objectID]))
-                    print("Prev W: {}\nPrev H: {}".format(prev_w[objectID],prev_h[objectID]))
-                    print("ROC W: " + str(abs(cur_w[objectID] - prev_w[objectID]) * 2.5) + "\nROC H: "+ str(abs(cur_h[objectID]-prev_h[objectID]) *2.5))
-                    wave_obj = sa.WaveObject.from_wave_file(
-                        "bleepsfxwav.wav")
+                    # print("Current W: {}\nCurrent H: {}".format(cur_w[objectID],cur_h[objectID]))
+                    # print("Prev W: {}\nPrev H: {}".format(prev_w[objectID],prev_h[objectID]))
+                    # print("ROC W: " + str(abs(cur_w[objectID] - prev_w[objectID]) * 2.5) + "\nROC H: "+ str(abs(cur_h[objectID]-prev_h[objectID]) *2.5))
+                    # print("Car {} triggered".format(objectID))
+                    wave_obj = sa.WaveObject.from_wave_file("bleepsfxwav.wav")
                     play_obj = wave_obj.play()
-                    print("Car {} triggered".format(objectID))
                     #play_obj.wait_done()
+                    w_count += 1
+
                 prev_w[objectID] = w
                 prev_h[objectID] = h              
 
@@ -215,7 +219,13 @@ def YOLO():
         # print((time.time()-prev_time)))
     cap.release()
     out.release()
+    cv2.destroyWindow('Warning-Sys')
 
+    cur_w.clear()
+    cur_h.clear()
+    prev_w.clear()
+    prev_h.clear()
+    del rects[:]
 
 if __name__ == "__main__":
     YOLO()
