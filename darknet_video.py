@@ -207,8 +207,7 @@ def YOLO(videopath):
                     if((time.time() - start_time) >= 2):
                         w_count += 1
                         start_time = 0
-
-                    warning_dict[w_count] = framecount
+                        warning_dict[w_count] = framecount
 
                 elif(w > 173 and h > 220):
                     # print("W: {}\nH: {}".format(w,h))
@@ -218,8 +217,7 @@ def YOLO(videopath):
                     if((time.time() - start_time) >= 2):
                         w_count += 1
                         start_time = 0
-
-                    warning_dict[w_count] = framecount
+                        warning_dict[w_count] = framecount
 
                 else:
                     cv2.rectangle(frame_resized, pt1, pt2, (0, 255, 0), 1)
